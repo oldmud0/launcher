@@ -399,13 +399,13 @@ void Updater::taskDownload(QDir &installDir, const QUrl &url, const QString &has
         }
 
         if (!hash.isEmpty()) {
-            QCryptographicHash sha1(QCryptographicHash::Sha1);
-            sha1.addData(&file);
-            if (sha1.result().toHex() == hash) {
+            QCryptographicHash sha256(QCryptographicHash::Sha256);
+            sha256.addData(&file);
+            if (sha256.result().toHex() == hash) {
                 skipDownload = true;
             } else {
                 qWarning() << "checksum mismatch: expected" << hash
-                           << "but got" << sha1.result().toHex();
+                           << "but got" << sha256.result().toHex();
             }
         }
 
@@ -467,11 +467,11 @@ void Updater::taskDownload(QDir &installDir, const QUrl &url, const QString &has
 
         // Calculate SHA-1 checksum of file
         if (!hash.isEmpty()) {
-            QCryptographicHash sha1(QCryptographicHash::Sha1);
-            sha1.addData(&file);
-            if (sha1.result().toHex() != hash) {
+            QCryptographicHash sha256(QCryptographicHash::Sha256);
+            sha256.addData(&file);
+            if (sha256.result().toHex() != hash) {
                 qCritical() << "checksum: expected" << hash
-                            << "but got" << sha1.result().toHex();
+                            << "but got" << sha256.result().toHex();
                 throw RuntimeError(tr("Checksum of file %1 was invalid.")
                                    .arg(url.toDisplayString()));
             }
@@ -493,12 +493,15 @@ void Updater::taskDownload(QDir &installDir, const QUrl &url, const QString &has
         // (Yeah, we're gonna do this crappy trick again...)
         eventLoop.reset(new QEventLoop());
         QArchive::DiskExtractor extractor(filename, installDir.path(), this, false);
+        // Note. The parmeters of the signal QArchive::DiskExtractor::error do not match the slot.
+        // QArchive::DiskExtractor::error emits short code only
         QObject::connect(&extractor, &QArchive::DiskExtractor::error,
-                         [&](short code, const QString &file) {
-            error = true;
-            errorMsg = file;
-            errorCode = code;
-            qCritical() << "Error extracting" << file << "- code" << code;
+                         [&](short code) {
+             const QString file("Unknown file");
+             error = true;
+             errorMsg = file;
+             errorCode = code;
+             qCritical() << "Error extracting" << file << "- code" << code;
             emit eventLoop->quit();
         });
         QObject::connect(&extractor, &QArchive::DiskExtractor::progress,
@@ -550,7 +553,7 @@ void Updater::taskDelete(QDir &installDir, const QStringList &targets) {
         if (!fileInfo.canonicalFilePath().startsWith(installDir.canonicalPath())) {
             qWarning() << target << ": ignoring invalid path!";
         } else {
-            QFile::remove(target);
+            QFile::remove(installDir.filePath(target));
         }
 
         completed++;
